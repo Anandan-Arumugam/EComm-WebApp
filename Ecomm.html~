@@ -1,0 +1,7 @@
+<html>
+<title>TestAPP</title>
+<body>
+<H1>Welcome to the website</H1><br>
+Uses Rest APIs. Try /login,/registerUser,/logout etc.
+</body>
+</html>
