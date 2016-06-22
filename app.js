@@ -1,26 +1,33 @@
 var http    = require("http");
 var express = require("express");
-var bodyParser = require('body-parser');
 var redis   = require("redis");
 var cookieParser = require('cookie-parser');
-var expressSession = require('express-session');
+var bodyParser = require('body-parser');
+var session = require('express-session');
 var client  = redis.createClient();
-var app = express();
-var RedisStore = require('connect-redis')(expressSession);
-//app.use(express.session({ store: new RedisStore }));
+var app = express(); 	
+var RedisStore = require('connect-redis')(session);
+
+//app.use(expressSession({ store: new RedisStore }));
 app.use(cookieParser());
-app.use(expressSession({ store: new RedisStore({
-  host:'localhost',
-  port:6380,
-  prefix:'sess',
-  client:client,
-  ttl :  260
-}), secret: 'EDISS' }));
+app.use(session({ 
+  cookieName:'EDISSSession',
+  secret: 'EDISS', 
+  store: new RedisStore({
+  	host:'localhost',
+  	port:6379,
+  	prefix:'sess',
+  	client:client,
+  	ttl :  260
+	}),
+  saveUninitialized: false,
+  resave: false
+}));
 
 app.use(bodyParser());
 app.use(bodyParser.json());
 
-app.use(bodyParser.urlencoded({extended: true}));
+app.use(bodyParser.urlencoded({extended: false}));
 
 var mysql      = require('mysql');
 var pool = mysql.createPool({
@@ -57,14 +64,14 @@ app.get('/',function(req,res){
 });
 
 app.post('/login',function(req,res){
-
+	//console.log(req.session);
 	Authenticate(req.body.username,req.body.password,function(err,fname,user){
 		if(!err) {
 				req.session.regenerate(function(){
 				req.session.name=user.username;
 				req.session.role=user.role;
 			    res.send("Welcome " + fname);
-				})
+				});
       		}
 		else{
 				res.send("That username and password combination was not correct"); 		
@@ -83,14 +90,14 @@ function Authenticate(username,password,fn){
 		connection.escape(username) +' and password =' + connection.escape(password), 
 		function(err, rows, fields) {
 				connection.release();
-				//console.log(query.sql);
-				////console.log(rows[0]);
+				////console.log(query.sql);
+				//////console.log(rows[0]);
 				if(!rows.length) {
-	 				//console.log("No user found");
+	 				////console.log("No user found");
 	 				return fn(new Error('cannot find user'));
 	 			}
 	 			else{
-	 				//console.log('user found'+rows[0]);
+	 				////console.log('user found'+rows[0]);
 	 				return fn(null,rows[0].fname,rows[0]);
 	 			}
 		    });
@@ -165,14 +172,14 @@ function updateUser(name,user,req,fn){
         										  +"), password= ifnull("+connection.escape(user.password)+",password"
         										  +") where username="+connection.escape(name),
         			function(err,results){
-							//console.log(query1.sql);
+							////console.log(query1.sql);
 							connection.release();
 						if(err){
 							return fn(new Error('There was a problem with this action'));
-							//console.log("update cannot be done");
+							////console.log("update cannot be done");
 						}
 						else{
-							//console.log("User updated");
+							////console.log("User updated");
 							return fn(null,true);
 						}
 					});
@@ -205,20 +212,20 @@ function AddProducts(session,product,fn){
 				connection.query("insert into products values ("+connection.escape(product.productId)
 						+","+connection.escape(product.name)+","+connection.escape(product.productDescription)
 						+","+connection.escape(product.group)+");",function(err,results){
-							//console.log(query1.sql);
+							////console.log(query1.sql);
 							connection.release();
 						if(err){
-							//console.log("Product cannot be added - duplicate entry");
+							////console.log("Product cannot be added - duplicate entry");
 							return fn(new Error("There was a problem with this action"));
 						}
 						else{
-							//console.log("Products added");
+							////console.log("Products added");
 							return fn(null,true);
 						}
 					});
 	 			}
 	 			else{
-	 				//console.log("Not admin");
+	 				////console.log("Not admin");
 	 				return fn(new Error('Only admin can perform this action'));
 	 			}
 	});
@@ -253,17 +260,17 @@ function updateProduct(session,product,fn){
 					+" where productId="+connection.escape(product.productId), function (err,results){
 					connection.release();
 					if(err){
-							console.log("Product cannot be updated - duplicate entry");
+							//console.log("Product cannot be updated - duplicate entry");
 							return fn(new Error("There was a problem with this action"));
 						}
 						else{
-						 	console.log("Products updated");
+						 	//console.log("Products updated");
 							return fn(null,true);
 						}
 					});
 			}
 			else{
-	 				//console.log("Not admin");
+	 				////console.log("Not admin");
 	 				return fn(new Error('Only admin can perform this action'));
 	 			}
 		});
@@ -298,19 +305,19 @@ function viewUsers(session,user,fn){
 			connection.query("select fname,lname from users where fname like ? and lname like ?",[fname,lname], 
 					function(err,results,fields){
 						connection.release();
-						//console.log(query1.sql);
+						////console.log(query1.sql);
 						if(err){
-							//console.log("Cannot list users");
+							////console.log("Cannot list users");
 							return;
 						}
 						else{
-							//console.log("User list :",results);
+							////console.log("User list :",results);
 							return fn(null,results);
 						}
 					})
 			}
 			else{
-				//console.log("Not admin");
+				////console.log("Not admin");
 				return fn(new Error("Only admin can perform this action"));
 			}
 		});
@@ -335,23 +342,23 @@ function viewProducts(product,fn){
           connection.release();
           return;
         }
-        //console.log(connection.escape(product.productId));
+        ////console.log(connection.escape(product.productId));
         var group=(connection.escape(product.group)==="NULL")?'%%':'%'+product.group+'%';
-        //console.log(group);
+        ////console.log(group);
         var keyword=(connection.escape(product.keyword)==="NULL")?'%%':'%'+product.keyword+'%';
-        //console.log(keyword);
+        ////console.log(keyword);
        connection.query("select name from products where productId like ifnull("
         	+connection.escape(product.productId)+",'%%') and `group` like ? and (name like ? or productDescription like ?)",[group,keyword,keyword],
 					function(err,results,fields){
 						connection.release();
-						//console.log(query1.sql);
+						////console.log(query1.sql);
 						if(err){
-							//console.log("Cannot list products");
+							////console.log("Cannot list products");
 							return;
 						}
 						else{
 							if(results.length){
-								//console.log("Product list :",results);
+								////console.log("Product list :",results);
 								return fn(null,results);	
 							}
 							else{
