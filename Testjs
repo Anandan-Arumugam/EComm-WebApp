@@ -1,0 +1,18 @@
+var http    = require("http");
+var express = require("express");
+var bodyParser = require('body-parser');
+var app = express();
+app.use(bodyParser());
+app.use(bodyParser.json());
+
+app.use(bodyParser.urlencoded({extended: false}));
+
+var line = 'Id:   0';
+var line ="{"+line+"}";
+var	currentLine;
+var	jsonRecord;
+currentLine = line.toString().replace(/'/g, "\"", "g");
+jsonRecord = JSON.parse(currentLine);
+console.log(jsonRecord.Id);
+console.log(jsonRecord);
+app.listen(3002);

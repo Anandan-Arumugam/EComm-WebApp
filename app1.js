@@ -354,9 +354,9 @@ function viewProducts(product,fn){
           return;
         }
         ////console.log(connection.escape(product.productId));
-        var group=(connection.escape(product.group)==="NULL")?'%%':'%'+product.group+'%';
+        var group=(connection.escape(product.group)==="NULL")?'%%':product.group;
         ////console.log(group);
-        var keyword=(connection.escape(product.keyword)==="NULL")?'%%':'%'+product.keyword+'%';
+        var keyword=(connection.escape(product.keyword)==="NULL")?'%%':product.keyword;
         ////console.log(keyword);
        connection.query("select name from products where productId like ifnull("
                 +connection.escape(product.productId)+",'%%') and `group` like ? and (name like ? or productDescription like ?)",[group,keyword,keyword],

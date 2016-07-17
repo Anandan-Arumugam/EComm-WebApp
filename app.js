@@ -28,7 +28,7 @@ app.use(bodyParser());
 app.use(bodyParser.json());
 
 app.use(bodyParser.urlencoded({extended: false}));
-
+/*
 var mysql      = require('mysql');
 var pool = mysql.createPool({
  	connectionLimit : 100, //important
@@ -38,20 +38,20 @@ var pool = mysql.createPool({
     database : 'EComm',
     port     : '3306',
     debug    :  false
+});*/
+
+
+
+ var mysql      = require('mysql');
+ var pool = mysql.createPool({
+  	connectionLimit : 100, //important
+    host     : 'ediss.clumahyxe987.us-east-1.rds.amazonaws.com',
+    user     : 'EComm',
+    password : '12345678',
+    database : 'EComm',
+    port     : '3306',
+    debug    :  false
 });
-
-
-
-// var mysql      = require('mysql');
-// var pool = mysql.createPool({
-//  	connectionLimit : 100, //important
-//     host     : 'ecomm.clumahyxe987.us-east-1.rds.amazonaws.com',
-//     user     : 'EComm',
-//     password : '12345678',
-//     database : 'EComm',
-//     port     : '3306',
-//     debug    :  true
-// });
 
 
 //Store all HTML files in view folder.
@@ -209,7 +209,7 @@ function AddProducts(session,product,fn){
           return;
         }
 			if(session.role) {
-				connection.query("insert into products values ("+connection.escape(product.productId)
+				connection.query("insert into products values ("+connection.escape(product.asin)
 						+","+connection.escape(product.name)+","+connection.escape(product.productDescription)
 						+","+connection.escape(product.group)+");",function(err,results){
 							////console.log(query1.sql);
@@ -226,6 +226,7 @@ function AddProducts(session,product,fn){
 	 			}
 	 			else{
 	 				////console.log("Not admin");
+	 				connection.release();
 	 				return fn(new Error('Only admin can perform this action'));
 	 			}
 	});
@@ -257,7 +258,7 @@ function updateProduct(session,product,fn){
 		if(session.role) {
 				connection.query("update products set name="+connection.escape(product.name)
 					+",productDescription="+connection.escape(product.productDescription)
-					+" where productId="+connection.escape(product.productId), function (err,results){
+					+" where asin="+connection.escape(product.asin), function (err,results){
 					connection.release();
 					if(err){
 							//console.log("Product cannot be updated - duplicate entry");
@@ -271,6 +272,7 @@ function updateProduct(session,product,fn){
 			}
 			else{
 	 				////console.log("Not admin");
+	 				connection.release();
 	 				return fn(new Error('Only admin can perform this action'));
 	 			}
 		});
@@ -318,6 +320,7 @@ function viewUsers(session,user,fn){
 			}
 			else{
 				////console.log("Not admin");
+				connection.release();
 				return fn(new Error("Only admin can perform this action"));
 			}
 		});
@@ -334,6 +337,7 @@ app.post('/viewProducts',function(req,res){
 				res.send(err.message);
 			}
 		})
+		
 });
 
 function viewProducts(product,fn){
@@ -342,17 +346,99 @@ function viewProducts(product,fn){
           connection.release();
           return;
         }
-        ////console.log(connection.escape(product.productId));
-        var group=(connection.escape(product.group)==="NULL")?'%%':'%'+product.group+'%';
+        var keyword = connection.escape(product.keyword);
+        var asin = connection.escape(product.asin);
+        var group=(connection.escape(product.group)==="NULL")?'%%':connection.escape(product.group);
         ////console.log(group);
-        var keyword=(connection.escape(product.keyword)==="NULL")?'%%':'%'+product.keyword+'%';
-        ////console.log(keyword);
-       connection.query("select name from products where productId like ifnull("
-        	+connection.escape(product.productId)+",'%%') and `group` like ? and (name like ? or productDescription like ?)",[group,keyword,keyword],
+        //var keyword=(connection.escape(product.keyword)==="NULL")?'%%':product.keyword;
+        if(asin!="NULL"){
+        	connection.query("select name from products where asin ="+asin,function(err,results,fields){
+        		connection.release();
+						//console.log(query1.sql)
+						if(err){
+							////console.log("Cannot list products");
+							return;
+						}
+						else{
+							if(results.length){
+							//console.log("Product list :",results);
+								return fn(null,results);	
+							}
+							else{
+								return fn(new Error("There were no products in the system that met that criteria"));
+							}
+							
+						}
+        	})
+        }
+        else if(keyword!="NULL" && group =='%%'){
+        connection.query("select name from products where match(name,productDescription) against("+keyword+") limit 1000",
 					function(err,results,fields){
 						connection.release();
-						////console.log(query1.sql);
+						//console.log(query1.sql)
 						if(err){
+							////console.log("Cannot list products");
+							return;
+						}
+						else{
+							if(results.length){
+							//console.log("Product list :",results);
+								return fn(null,results);	
+							}
+							else{
+								return fn(new Error("There were no products in the system that met that criteria"));
+							}
+							
+						}
+					})
+    		}
+    	else if(keyword !="NULL" && group !='%%'){
+    		connection.query("select name from products where `group`="+group+" and match(name,productDescription) against("+keyword+") limit 1000",
+    			function(err,results,fields){
+    					connection.release();
+						//console.log(query1.sql)
+						if(err){
+							////console.log("Cannot list products");
+							return;
+						}
+						else{
+							if(results.length){
+							//console.log("Product list :",results);
+								return fn(null,results);	
+							}
+							else{
+								return fn(new Error("There were no products in the system that met that criteria"));
+							}
+							
+						}
+    			})
+    	}
+    	else if(keyword =="NULL" && group !='%%'){
+    		connection.query("select name from products where `group` like "+group+" limit 1000",
+    			function(err,results,fields){
+    					connection.release();
+						//console.log(query1.sql)
+						if(err){
+							////console.log("Cannot list products");
+							return;
+						}
+						else{
+							if(results.length){
+							//console.log("Product list :",results);
+								return fn(null,results);	
+							}
+							else{
+								return fn(new Error("There were no products in the system that met that criteria"));
+							}
+							
+						}
+    			})
+    	}
+    	else{	
+    		connection.query("select name from products limit 1000",
+                                        function(err,results,fields){
+                                        	connection.release();
+    			if(err){
 							////console.log("Cannot list products");
 							return;
 						}
@@ -366,8 +452,11 @@ function viewProducts(product,fn){
 							}
 							
 						}
-					})
-		});
+        	}
+
+		)};
+
+    });
 }
 
 app.post('/logout',function(req,res){
