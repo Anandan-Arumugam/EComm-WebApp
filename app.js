@@ -28,7 +28,7 @@ app.use(bodyParser());
 app.use(bodyParser.json());
 
 app.use(bodyParser.urlencoded({extended: false}));
-/*
+
 var mysql      = require('mysql');
 var pool = mysql.createPool({
  	connectionLimit : 100, //important
@@ -38,11 +38,11 @@ var pool = mysql.createPool({
     database : 'EComm',
     port     : '3306',
     debug    :  false
-});*/
+});
 
 
 
- var mysql      = require('mysql');
+/* var mysql      = require('mysql');
  var pool = mysql.createPool({
   	connectionLimit : 100, //important
     host     : 'ediss.clumahyxe987.us-east-1.rds.amazonaws.com',
@@ -51,7 +51,7 @@ var pool = mysql.createPool({
     database : 'EComm',
     port     : '3306',
     debug    :  false
-});
+});*/
 
 
 //Store all HTML files in view folder.
@@ -128,6 +128,7 @@ function RegisterUser(user,fn){
 						+connection.escape(user.zip)+",DEFAULT,"+connection.escape(user.email)+");",function(err,results){
 							connection.release();
 						if(err){
+							//console.log(user.username)
 							return fn(new Error('There was a problem with your registration'));
 						}
 						else{
@@ -175,7 +176,10 @@ function updateUser(name,user,req,fn){
 							////console.log(query1.sql);
 							connection.release();
 						if(err){
-							return fn(new Error('There was a problem with this action'));
+							/*console.log("login ="+ name);
+							console.log("username requested="+user.username);
+							console.log(connection.escape(user.username))
+							*/return fn(new Error("There was a problem with this action"));
 							////console.log("update cannot be done");
 						}
 						else{
@@ -337,7 +341,7 @@ app.post('/viewProducts',function(req,res){
 				res.send(err.message);
 			}
 		})
-		
+
 });
 
 function viewProducts(product,fn){
@@ -346,7 +350,10 @@ function viewProducts(product,fn){
           connection.release();
           return;
         }
-        var keyword = connection.escape(product.keyword);
+        var key = connection.escape(product.keyword);
+        var keyword = (key.indexOf(' ')>0)?key:'\''+product.keyword+'*\'';
+        /*var keyword = connection.escape(product.keyword);
+        */
         var asin = connection.escape(product.asin);
         var group=(connection.escape(product.group)==="NULL")?'%%':connection.escape(product.group);
         ////console.log(group);
