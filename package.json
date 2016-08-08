@@ -15,6 +15,7 @@
     "express": "^4.14.0",
     "express-session": "^1.13.0",
     "mysql": "^2.11.1",
+    "raccoon": "^0.2.3",
     "redis": "^2.6.2"
   }
 }

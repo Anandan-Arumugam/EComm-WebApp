@@ -28,10 +28,10 @@ app.use(bodyParser());
 app.use(bodyParser.json());
 
 app.use(bodyParser.urlencoded({extended: false}));
-
+/*
 var mysql      = require('mysql');
 var pool = mysql.createPool({
- 	connectionLimit : 100, //important
+ 	connectionLimit : 1000, //important
     host     : 'localhost',
     user     : 'EComm',
     password : 'EComm',
@@ -39,19 +39,28 @@ var pool = mysql.createPool({
     port     : '3306',
     debug    :  false
 });
-
-
-
-/* var mysql      = require('mysql');
- var pool = mysql.createPool({
-  	connectionLimit : 100, //important
-    host     : 'ediss.clumahyxe987.us-east-1.rds.amazonaws.com',
+*/
+ var mysql      = require('mysql');
+ var poolRead = mysql.createPool({
+  	connectionLimit : 500, //important
+    host     : 'DataServer-LB-1356862133.us-east-1.elb.amazonaws.com',
     user     : 'EComm',
-    password : '12345678',
+    password : 'EComm',
     database : 'EComm',
     port     : '3306',
     debug    :  false
-});*/
+});
+
+var poolWrite = mysql.createPool({
+  	connectionLimit : 1000, //important
+    host     : 'ec2-52-23-201-213.compute-1.amazonaws.com',
+    user     : 'EComm',
+    password : 'EComm',
+    database : 'EComm',
+    port     : '3306',
+    debug    :  false
+});
+
 
 
 //Store all HTML files in view folder.
@@ -80,7 +89,7 @@ app.post('/login',function(req,res){
 });
 
 function Authenticate(username,password,fn){
-	pool.getConnection(function(err,connection) {
+	poolRead.getConnection(function(err,connection) {
     if (err) {
           connection.release();
           res.json({"code" : 100, "status" : "Error in connection database"});
@@ -117,7 +126,7 @@ app.post('/registerUser',function(req,res){
 })
 
 function RegisterUser(user,fn){
-	pool.getConnection(function(err,connection) {
+	poolWrite.getConnection(function(err,connection) {
     if (err) {
           connection.release();
           res.json({"code" : 100, "status" : "Error in connection database"});
@@ -156,7 +165,7 @@ app.post('/updateInfo',function(req,res){
 });
 
 function updateUser(name,user,req,fn){
-	pool.getConnection(function(err,connection) {
+	poolWrite.getConnection(function(err,connection) {
     if (err) {
           connection.release();
           res.json({"code" : 100, "status" : "Error in connection database"});
@@ -207,7 +216,7 @@ app.post('/addProducts',function(req,res){
 })
 
 function AddProducts(session,product,fn){
-	pool.getConnection(function(err,connection) {
+	poolWrite.getConnection(function(err,connection) {
     if (err) {
           connection.release();
           return;
@@ -215,7 +224,7 @@ function AddProducts(session,product,fn){
 			if(session.role) {
 				connection.query("insert into products values ("+connection.escape(product.asin)
 						+","+connection.escape(product.name)+","+connection.escape(product.productDescription)
-						+","+connection.escape(product.group)+");",function(err,results){
+						+","+connection.escape(product.categories)+");",function(err,results){
 							////console.log(query1.sql);
 							connection.release();
 						if(err){
@@ -253,7 +262,7 @@ app.post('/modifyProduct',function(req,res){
 })
 
 function updateProduct(session,product,fn){
-	pool.getConnection(function(err,connection) {
+	poolWrite.getConnection(function(err,connection) {
     if (err) {
           connection.release();
           return;
@@ -300,7 +309,7 @@ app.post('/viewUsers',function(req,res){
 });
 
 function viewUsers(session,user,fn){
-	pool.getConnection(function(err,connection) {
+	poolRead.getConnection(function(err,connection) {
     if (err) {
           connection.release();
           return;
@@ -335,7 +344,19 @@ function viewUsers(session,user,fn){
 app.post('/viewProducts',function(req,res){
 		viewProducts(req.body,function(err,data){
 			if(!err){
-				res.send(data);
+				if(data.length > 0){
+				    //res.send(results);
+				    var finalResults = "product_list:[{name:"
+				    for(var i=0;i<data.length;i++){
+				      	if(i){
+				        	finalResults += ',name:';
+				      	}
+				     finalResults+=data[i]["name"];
+				     finalResults += '}'
+				    }
+				    finalResults += ']'
+				}
+					res.send(finalResults);
 			}
 			else{
 				res.send(err.message);
@@ -345,126 +366,329 @@ app.post('/viewProducts',function(req,res){
 });
 
 function viewProducts(product,fn){
-	pool.getConnection(function(err,connection) {
+	poolRead.getConnection(function(err,connection) {
     if (err) {
           connection.release();
           return;
         }
         var key = connection.escape(product.keyword);
-        var keyword = (key.indexOf(' ')>0)?key:'\''+product.keyword+'*\'';
-        /*var keyword = connection.escape(product.keyword);
-        */
+        var keyword = "\""+product.keyword+"\"";
         var asin = connection.escape(product.asin);
-        var group=(connection.escape(product.group)==="NULL")?'%%':connection.escape(product.group);
-        ////console.log(group);
+        var categories=(connection.escape(product.categories)==="NULL")?'%%':connection.escape(product.categories);
+		////console.log(categories);
         //var keyword=(connection.escape(product.keyword)==="NULL")?'%%':product.keyword;
-        if(asin!="NULL"){
-        	connection.query("select name from products where asin ="+asin,function(err,results,fields){
-        		connection.release();
-						//console.log(query1.sql)
-						if(err){
-							////console.log("Cannot list products");
-							return;
-						}
-						else{
-							if(results.length){
-							//console.log("Product list :",results);
-								return fn(null,results);	
-							}
-							else{
-								return fn(new Error("There were no products in the system that met that criteria"));
-							}
-							
-						}
-        	})
+         if(asin!="NULL"){
+                connection.query("select name from products where asin ="+asin,function(err,results,fields){
+                        connection.release();
+                                                //console.log(query1.sql)
+                                                if(err){
+                                                        ////console.log("Cannot list products");
+                                                        return;
+                                                }
+                                                else{
+                                                        if(results.length){
+                                                        //console.log("Product list :",results);
+                                                                return fn(null,results);
+                                                        }
+                                                        else{
+                                                                return fn(new Error("There were no products in the system that met that criteria"));
+                                                        }
+
+                                                }
+                })
         }
-        else if(keyword!="NULL" && group =='%%'){
-        connection.query("select name from products where match(name,productDescription) against("+keyword+") limit 1000",
-					function(err,results,fields){
-						connection.release();
-						//console.log(query1.sql)
-						if(err){
-							////console.log("Cannot list products");
-							return;
-						}
-						else{
-							if(results.length){
-							//console.log("Product list :",results);
-								return fn(null,results);	
-							}
-							else{
-								return fn(new Error("There were no products in the system that met that criteria"));
-							}
-							
-						}
-					})
-    		}
-    	else if(keyword !="NULL" && group !='%%'){
-    		connection.query("select name from products where `group`="+group+" and match(name,productDescription) against("+keyword+") limit 1000",
-    			function(err,results,fields){
-    					connection.release();
-						//console.log(query1.sql)
-						if(err){
-							////console.log("Cannot list products");
-							return;
-						}
-						else{
-							if(results.length){
-							//console.log("Product list :",results);
-								return fn(null,results);	
-							}
-							else{
-								return fn(new Error("There were no products in the system that met that criteria"));
-							}
-							
-						}
-    			})
-    	}
-    	else if(keyword =="NULL" && group !='%%'){
-    		connection.query("select name from products where `group` like "+group+" limit 1000",
-    			function(err,results,fields){
-    					connection.release();
-						//console.log(query1.sql)
-						if(err){
-							////console.log("Cannot list products");
-							return;
-						}
-						else{
-							if(results.length){
-							//console.log("Product list :",results);
-								return fn(null,results);	
-							}
-							else{
-								return fn(new Error("There were no products in the system that met that criteria"));
-							}
-							
-						}
-    			})
-    	}
-    	else{	
-    		connection.query("select name from products limit 1000",
+        else if(key!="NULL" && categories =='%%'){
+        connection.query("select name from products where match(name,productDescription) against('"+keyword+"') limit 1000",
                                         function(err,results,fields){
-                                        	connection.release();
-    			if(err){
-							////console.log("Cannot list products");
-							return;
-						}
-						else{
-							if(results.length){
-								////console.log("Product list :",results);
-								return fn(null,results);	
-							}
-							else{
-								return fn(new Error("There were no products in the system that met that criteria"));
-							}
-							
-						}
-        	}
+                                                connection.release();
+                                                //console.log(query1.sql)
+                                                if(err){
+                                                        ////console.log("Cannot list products");
+                                                        return;
+                                                }
+                                                else{
+                                                        if(results.length){
+                                                        //console.log("Product list :",results);
+                                                                return fn(null,results);
+                                                        }
+                                                        else{
+                                                                return fn(new Error("There were no products in the system that met that criteria"));
+                                                        }
+
+                                                }
+                                        })
+                }
+        else if(key !="NULL" && categories !='%%'){
+                connection.query("select name from products where categories="+categories+" and match(name,productDescription) against("+keyword+") limit 1000",
+                        function(err,results,fields){
+                                        connection.release();
+                                                //console.log(query1.sql)
+                                                if(err){
+                                                        ////console.log("Cannot list products");
+                                                        return;
+                                                }
+                                                else{
+                                                        if(results.length){
+                                                        //console.log("Product list :",results);
+                                                                return fn(null,results);
+                                                        }
+                                                        else{
+                                                                return fn(new Error("There were no products in the system that met that criteria"));
+                                                        }
+
+                                                }
+                                                 })
+        }
+        else if(key =="NULL" && categories !='%%'){
+                connection.query("select name from products where categories like "+categories+" limit 1000",
+                        function(err,results,fields){
+                                        connection.release();
+                                                //console.log(query1.sql)
+                                                if(err){
+                                                        ////console.log("Cannot list products");
+                                                        return;
+                                                }
+                                                else{
+                                                        if(results.length){
+                                                        //console.log("Product list :",results);
+                                                                return fn(null,results);
+                                                        }
+                                                        else{
+                                                                return fn(new Error("There were no products in the system that met that criteria"));
+                                                        }
+
+                                                }
+                        })
+        }
+        else{
+                connection.query("select name from products limit 1000",
+                                        function(err,results,fields){
+                                                connection.release();
+                        if(err){
+                                                        ////console.log("Cannot list products");
+                                                        return;
+                                                }
+                                                else{
+                                                        if(results.length){
+                                                                ////console.log("Product list :",results);
+                                                                return fn(null,results);
+                                                        }
+                                                        else{
+                                                                return fn(new Error("There were no products in the system that met that criteria"));
+                                                        }
+
+                                                }
+                }
+
 
 		)};
 
     });
 }
+
+app.post('/buyProducts',function(req,res){
+	if(req.session.name){
+		updateProductsPurchased(req.session,req.body,function(err,data){
+			if(!err){
+				updateRecommendation(req.body,function(err,data){
+					if(!err){
+						res.send("The product information has been updated");
+					}
+					else{
+					res.send(err.message);
+					}
+			})
+			}
+			else{
+				res.send(err.message);
+			}
+		})
+   	}
+   	else{
+   		res.send("There was a problem with this action")
+   	}
+})
+
+function updateProductsPurchased(session,products,fn){
+	poolWrite.getConnection(function(err,connection) {
+    if (err) {
+          connection.release();
+          return;
+        }
+        	var temp = products.asin.replace("[","");
+			var list = temp.replace("]","").split(",");
+			var values="";
+			var total=0;
+			for(var i=0;i<list.length;i++){
+				if(total){
+					values += ',';
+				}
+				values += `('${list[i]}','${session.name}')`;
+				total++;
+			}	
+			connection.query('insert into productsPurchased (asin,username) values '+values, 
+				function (err,results){
+					connection.release();
+					if(err){
+							console.log(query.sql)
+							console.log(err.message)
+							//console.log("Product cannot be updated - duplicate entry");
+							return fn(new Error("There was a problem with this action"));
+						}
+
+					else{
+						return fn(null,true);
+					}
+			
+		});
+	});
+}
+
+function updateRecommendation(products,fn){
+	poolWrite.getConnection(function(err,connection) {
+    if (err) {
+          connection.release();
+          return;
+        }
+        	var temp = products.asin.replace("[","");
+			var list = temp.replace("]","").split(",").slice().sort();
+			var results = [];
+			for (var i = 0; i < list.length; i++) {
+			    if (i+1 < list.length && list[i + 1] == list[i]) {
+			        continue;
+			    }
+			    results.push(list[i]);
+			}
+			if(results.length>1)
+			{
+						var total =0;
+						var values = "";
+						for(var i=0;i<results.length;i++){
+							for(var j=0;j<results.length;j++){
+								if(i==j){
+									continue;
+								}
+								if(total){
+									values +=',';
+								}
+						    values +=`('${results[i]}','${results[j]}')`;
+						    total++;
+						}
+					}
+					connection.query('Insert into recommendation (bought,alsoBought) values '+values,function(err,results){
+						connection.release();
+						if(	err){
+							console.log(query.sql)
+							console.log(err.message)
+							return fn(new Error("There was a problem with this action"));
+						}
+						else{
+							return fn(null,true);
+						}
+					})
+			}
+			else{
+				connection.release();
+				return fn(null,true);
+			}	
+			
+		});
+}
+
+app.post('/productsPurchased',function(req,res){
+	if(req.session.role){
+		viewBoughtProducts(req.body.username,function(err,data){
+			if(!err){
+				if(data.length > 0){
+				    //res.send(results);
+				    var finalResults = "product_list:{"
+				    for(var i=0;i<data.length;i++){
+				      	if(i){
+				        	finalResults += ',';
+				      	}
+				     finalResults+=data[i]["name"];
+				    }
+				}
+				    finalResults += '}'
+				res.send(finalResults);
+			}
+			else{
+				res.send(err.message);
+			}
+		})
+   	}
+   	else{
+   		res.send("There was a problem with this action")
+   	}
+
+})
+
+function viewBoughtProducts (user,fn){
+	poolRead.getConnection(function(err,connection) {
+    if (err) {
+          connection.release();
+          return;
+        }
+        	connection.query("select p.name,count(*) as quantity from productsPurchased pp, products p where pp.username='"+user+"' and pp.asin=p.asin group by pp.asin", function (err,results){
+					connection.release();
+					if(err){
+							/*console.log(query.sql);
+							*///console.log("Product cannot be updated - duplicate entry");
+							console.log(err.message)
+							return fn(new Error("There was a problem with this action"));
+						}
+						else{
+							//console.log(results)
+							return fn(null,results);
+						}
+					});
+			
+				
+			
+		});
+}
+
+app.post('/getRecommendations',function(req,res){
+	getRecommendations(req.body.asin,function(err,data){
+		if(!err){
+				if(data.length > 0){
+				    //res.send(results);
+				    var finalResults = ""
+				    for(var i=0;i<data.length;i++){
+				      	if(i){
+				        	finalResults += ',';
+				      	}
+				     finalResults+=data[i]["name"];
+				    }
+				}
+					res.send(finalResults);
+			}
+			else{
+				res.send(err.message);
+			}
+	})
+})
+
+function getRecommendations(asin,fn){
+	poolRead.getConnection(function(err,connection) {
+    if (err) {
+          connection.release();
+          return;
+        }
+        connection.query("select name from products p inner join (select alsoBought from recommendation where bought ='"+asin+"' group by alsoBought order by count(*) desc limit 5) as r on p.asin=r.alsoBought;",
+        	function(err,results){
+        		connection.release();
+        		if(err){
+        			console.log(err.message);
+        			return fn(new Error("There was a problem with this action"));
+        		}
+        		else{
+        			return fn(null,results);
+        		}
+        	})
+})
+}
+
 
 app.post('/logout',function(req,res){
 	if(req.session.name){
